@@ -1,13 +1,12 @@
 "use client";
 
-import { formatDateTime } from "@/utils/dateFormatter";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 import { 
   ShieldCheck, Home, LogOut, ArrowLeft, CalendarClock, 
-  User, Clock, Hash, CheckCircle2, XCircle, AlertTriangle, Activity, Stethoscope 
+  User, Hash, CheckCircle2, XCircle, AlertTriangle, Activity, Stethoscope 
 } from "lucide-react";
 
 export default function UpcomingAppointmentsPage() {
@@ -27,14 +26,51 @@ export default function UpcomingAppointmentsPage() {
     fetchUpcomingAppointments(token);
   }, [router]);
 
-  
   const fetchUpcomingAppointments = async (token: string) => {
     try {
-      const response = await axios.get("http://localhost:8000/appointments/me/upcoming", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       
-      setAppointments(response.data.appointments || []);
+      const [aptRes, schedRes] = await Promise.all([
+        axios.get("http://localhost:8000/appointments/me/upcoming", {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get("http://localhost:8000/schedules/available", {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => ({ data: [] }))
+      ]);
+      
+      const allAppointments = aptRes.data.appointments || [];
+      const allSchedules = Array.isArray(schedRes.data) ? schedRes.data : [];
+
+      const now = new Date();
+
+      
+      const enrichedAppointments = allAppointments.map((apt: any) => {
+        const matchedSchedule = allSchedules.find((s: any) => 
+          s.date === apt.date && 
+          (
+            s.doctor_name?.toLowerCase().trim() === apt.doctor_name?.toLowerCase().trim() ||
+            s.doctor_username?.toLowerCase().trim() === apt.doctor_name?.toLowerCase().trim()
+          )
+        );
+
+        return {
+          ...apt,
+          start_time: matchedSchedule?.start_time || apt.start_time || null,
+          end_time: matchedSchedule?.end_time || apt.end_time || null
+        };
+      });
+
+      
+      const filteredUpcoming = enrichedAppointments.filter((apt: any) => {
+        const [year, month, day] = apt.date.split("-").map(Number);
+        const endTimeString = apt.end_time || "18:00:00"; 
+        const [hours, minutes] = endTimeString.split(":").map(Number);
+        
+        const aptEndDateTime = new Date(year, month - 1, day, hours, minutes, 0);
+        return aptEndDateTime > now;
+      });
+
+      setAppointments(filteredUpcoming);
     } catch (err: any) {
       console.error("Failed to load upcoming appointments", err);
       setError("Unable to retrieve your appointments from the server.");
@@ -43,7 +79,6 @@ export default function UpcomingAppointmentsPage() {
     }
   };
 
-  
   const handleCancelAppointment = async (appointmentId: number, refNumber: string) => {
     if (!window.confirm(`Are you absolutely sure you want to cancel the appointment (${refNumber})? This action cannot be undone.`)) {
       return;
@@ -59,10 +94,7 @@ export default function UpcomingAppointmentsPage() {
       });
 
       setActionMessage({ text: `Appointment ${refNumber} has been successfully cancelled.`, type: "success" });
-      
-      
       setAppointments(prev => prev.filter(apt => apt.appointment_id !== appointmentId));
-      
       setTimeout(() => setActionMessage({ text: "", type: "" }), 4000);
     } catch (err: any) {
       let errorText = "Failed to cancel the appointment.";
@@ -81,6 +113,25 @@ export default function UpcomingAppointmentsPage() {
   };
 
   
+  const formatDateTimeDisplay = (dateString: string, startTime?: string | null, endTime?: string | null) => {
+    const [year, month, day] = dateString.split("-").map(Number);
+    const dateObj = new Date(year, month - 1, day);
+    const optionsDate: Intl.DateTimeFormatOptions = { month: 'short', day: '2-digit', year: 'numeric' };
+    const dateFormatted = dateObj.toLocaleDateString('en-US', optionsDate).toUpperCase();
+    
+    if (startTime && endTime) {
+      const formatTime = (timeStr: string) => {
+        const [h, m] = timeStr.split(':');
+        let hours = parseInt(h, 10);
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        return `${hours.toString().padStart(2, '0')}:${m} ${ampm}`;
+      };
+      return `${dateFormatted} • ${formatTime(startTime)} - ${formatTime(endTime)}`;
+    }
+    
+    return dateFormatted;
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans overflow-hidden">
@@ -153,14 +204,13 @@ export default function UpcomingAppointmentsPage() {
               <div className="text-center py-24 border border-dashed border-slate-800 rounded-3xl bg-slate-900/30">
                 <Stethoscope size={48} className="mx-auto text-slate-700 mb-4 opacity-50" />
                 <p className="text-sm text-slate-400 tracking-widest uppercase font-bold mb-2">No Upcoming Visits</p>
-                <p className="text-xs text-slate-600 tracking-widest uppercase">You don't have any medical appointments scheduled at the moment.</p>
+                <p className="text-xs text-slate-600 tracking-widest uppercase">You don't have any upcoming medical appointments at the moment.</p>
                 <Link href="/dashboard/book" className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-purple-900/30 hover:bg-purple-900/50 border border-purple-800/50 text-purple-300 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors">
                   Book a New Appointment
                 </Link>
               </div>
             ) : (
               appointments.map((apt) => {
-                
                 const isInProgress = apt.status === "In Progress";
 
                 return (
@@ -185,7 +235,8 @@ export default function UpcomingAppointmentsPage() {
                       <div className="flex flex-col sm:flex-row gap-4 mt-4">
                         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">
                           <CalendarClock size={14} className="text-purple-400" />
-                          {formatDateTime(apt.date)}                        </div>
+                          {formatDateTimeDisplay(apt.date, apt.start_time, apt.end_time)}
+                        </div>
                         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800">
                           <User size={14} className="text-purple-400" />
                           Queue Slot: <span className="text-white text-lg font-mono ml-1">{String(apt.slot_number).padStart(2, '0')}</span>

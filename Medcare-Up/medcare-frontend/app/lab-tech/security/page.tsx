@@ -7,7 +7,8 @@ import axios from "axios";
 import { 
   FlaskConical, LayoutDashboard, ScrollText, UserCog, LogOut, 
   Activity, ShieldCheck, Lock, Smartphone, AlertTriangle, 
-  CheckCircle2, Trash2, Monitor, Globe, Mail, SmartphoneNfc, QrCode
+  CheckCircle2, Trash2, Monitor, Globe, Mail, SmartphoneNfc, QrCode,
+  Menu, X, Fingerprint 
 } from "lucide-react";
 
 export default function LabTechSecurityPage() {
@@ -17,13 +18,16 @@ export default function LabTechSecurityPage() {
   const [loading, setLoading] = useState(true);
   const [sysMessage, setSysMessage] = useState({ text: "", type: "" });
   
+  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
   // Profile States
   const [profile, setProfile] = useState<any>(null);
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
-    const getPasswordStrength = (pw: string) => {
+  const getPasswordStrength = (pw: string) => {
     let score = 0;
     if (pw.length >= 8) score++;
     if (/[A-Z]/.test(pw)) score++;
@@ -42,15 +46,16 @@ export default function LabTechSecurityPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
-   const strength = getPasswordStrength(newPassword);
+  const strength = getPasswordStrength(newPassword);
 
-  // MFA States
+  // 🟢 MFA සහ SmartShield States
   const [mfaEmailEnabled, setMfaEmailEnabled] = useState(false);
   const [mfaAppEnabled, setMfaAppEnabled] = useState(false);
+  const [smartShieldEnabled, setSmartShieldEnabled] = useState(false); 
   const [togglingMfa, setTogglingMfa] = useState(false);
   
   // Google Authenticator Setup States
-  const [setupStep, setSetupStep] = useState(0); // 0 = Not setting up, 1 = Show QR & Enter Code
+  const [setupStep, setSetupStep] = useState(0); 
   const [qrCodeUri, setQrCodeUri] = useState("");
   const [mfaSecret, setMfaSecret] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
@@ -84,9 +89,9 @@ export default function LabTechSecurityPage() {
       setEditPhone(profData.contact_number || "");
       setEditEmail(profData.email || "");
       
-      
       setMfaEmailEnabled(profData.mfa_email_enabled || false);
       setMfaAppEnabled(profData.mfa_app_enabled || false); 
+      setSmartShieldEnabled(profData.smartshield_enabled ?? true); 
 
       setSessions(sessionsRes.data);
 
@@ -148,6 +153,26 @@ export default function LabTechSecurityPage() {
     }
   };
 
+  // 🚀 ACTION: Toggle SmartShield (NEW)
+  const handleSmartShieldToggle = async () => {
+    setTogglingMfa(true);
+    const newStatus = !smartShieldEnabled;
+    try {
+      const token = localStorage.getItem("medcare_token");
+      if (!token) return;
+      await axios.post(`http://localhost:8000/auth/security/toggle-smartshield?enable=${newStatus}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSmartShieldEnabled(newStatus);
+      if (newStatus) setMfaEmailEnabled(false); // 🟢 Email එක ඉබේම Off වෙනවා
+      showToast(`SmartShield Security has been ${newStatus ? 'enabled' : 'disabled'}.`, "success");
+    } catch (err: any) {
+      showToast(err.response?.data?.detail || "Failed to toggle SmartShield.", "error");
+    } finally {
+      setTogglingMfa(false);
+    }
+  };
+
   // 🚀 ACTION: Toggle Email MFA
   const handleEmailMfaToggle = async () => {
     setTogglingMfa(true);
@@ -159,6 +184,7 @@ export default function LabTechSecurityPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMfaEmailEnabled(newStatus);
+      if (newStatus) setSmartShieldEnabled(false); // 🟢 SmartShield එක ඉබේම Off වෙනවා
       showToast(`Email MFA has been ${newStatus ? 'Enabled' : 'Disabled'}`, "success");
     } catch (err: any) {
       showToast(err.response?.data?.detail || "Email MFA toggle failed.", "error");
@@ -209,7 +235,7 @@ export default function LabTechSecurityPage() {
 
   // 🚀 ACTION: Disable Google Authenticator
   const handleDisableAppMfa = async () => {
-    if (!confirm("Are you sure you want to disable Authenticator App security?")) return;
+    if (!window.confirm("Are you sure you want to disable Authenticator App security?")) return;
     try {
       const token = localStorage.getItem("medcare_token");
       if (!token) return;
@@ -225,7 +251,7 @@ export default function LabTechSecurityPage() {
 
   // 🚀 ACTION: Revoke Remote Sessions (Kill Switch)
   const handleRevokeSessions = async () => {
-    if (!confirm("Are you sure? This will log out all other active devices immediately.")) return;
+    if (!window.confirm("Are you sure? This will log out all other active devices immediately.")) return;
     try {
       const token = localStorage.getItem("medcare_token");
       if (!token) return;
@@ -253,44 +279,58 @@ export default function LabTechSecurityPage() {
     );
   }
 
-  const isVulnerable = !mfaEmailEnabled && !mfaAppEnabled;
+  const isVulnerable = !mfaEmailEnabled && !mfaAppEnabled && !smartShieldEnabled;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans overflow-hidden selection:bg-sky-500/30">
       
       {/* Toast Notification */}
       {sysMessage.text && (
-        <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full text-xs font-bold tracking-widest uppercase shadow-2xl flex items-center gap-2 animate-fadeIn border ${
-          sysMessage.type === "success" ? "bg-emerald-950/80 text-emerald-400 border-emerald-900/50" : "bg-red-950/80 text-red-400 border-red-900/50"
+        <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-[70] px-6 py-3 w-[90%] md:w-auto text-center rounded-full text-[10px] md:text-xs font-bold tracking-widest uppercase shadow-2xl flex items-center justify-center gap-2 animate-fadeIn border ${
+          sysMessage.type === "success" ? "bg-emerald-950/90 text-emerald-400 border-emerald-900/50" : "bg-red-950/90 text-red-400 border-red-900/50"
         }`}>
-          {sysMessage.type === "success" ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+          {sysMessage.type === "success" ? <CheckCircle2 size={16} className="shrink-0" /> : <AlertTriangle size={16} className="shrink-0" />}
           {sysMessage.text}
         </div>
       )}
 
-      {/* 🟢 LAB TECH SIDEBAR */}
-      <div className="w-72 bg-slate-950 border-r border-slate-800/60 hidden md:flex flex-col justify-between z-20 shadow-[4px_0_24px_rgba(0,0,0,0.4)]">
+      {/* 🟢 MOBILE OVERLAY BACKGROUND */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* 🟢 LAB TECH SIDEBAR (Responsive) */}
+      <div className={`fixed inset-y-0 left-0 w-72 bg-slate-950 border-r border-slate-800/60 flex flex-col justify-between z-50 shadow-[4px_0_24px_rgba(0,0,0,0.4)] transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div>
-          <div className="p-6 border-b border-slate-800/60 flex items-center gap-3 bg-slate-900/20">
-            <FlaskConical className="w-10 h-10 text-sky-400 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]" />
-            <div>
-              <h1 className="text-sm font-extrabold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-sky-400 text-[10px]">Lab Terminal</span></h1>
+          <div className="p-6 border-b border-slate-800/60 flex items-center justify-between bg-slate-900/20">
+            <div className="flex items-center gap-3">
+              <FlaskConical className="w-10 h-10 text-sky-400 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]" />
+              <div>
+                <h1 className="text-sm font-extrabold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-sky-400 text-[10px]">Lab Terminal</span></h1>
+              </div>
             </div>
+            {/* Phone Sidebar Close */}
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
+              <X size={24} />
+            </button>
           </div>
           
           <div className="p-4 space-y-2 mt-4">
-            <Link href="/lab-tech" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
+            <Link href="/lab-tech" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
               <LayoutDashboard size={18} /> The Lab Hub
             </Link>
-            <Link href="/lab-tech/analytics" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
+            <Link href="/lab-tech/analytics" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
               <Activity size={18} /> Efficiency Matrix
             </Link>
-            <Link href="/lab-tech/logs" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
+            <Link href="/lab-tech/logs" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
               <ScrollText size={18} /> Activity Logs
             </Link>
             
             {/* Active Page */}
-            <div className="w-full flex items-center gap-3 px-4 py-3 bg-sky-900/30 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-bold tracking-widest uppercase shadow-[0_0_20px_rgba(56,189,248,0.15)] transition-all">
+            <div className="w-full flex items-center gap-3 px-4 py-3 bg-sky-900/30 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-bold tracking-widest uppercase shadow-[0_0_20px_rgba(56,189,248,0.15)] transition-all cursor-default">
               <UserCog size={18} /> Profile & Security
             </div>
           </div>
@@ -303,20 +343,34 @@ export default function LabTechSecurityPage() {
       </div>
 
       {/* 🟢 MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col h-screen overflow-y-auto relative bg-slate-950">
-        <div className="absolute top-0 right-0 w-200 h-125 bg-sky-500/5 rounded-full blur-[150px] pointer-events-none"></div>
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto relative bg-slate-950 w-full">
+        <div className="absolute top-0 right-0 w-[500px] md:w-[800px] h-[500px] bg-sky-500/5 rounded-full blur-[150px] pointer-events-none"></div>
         <div className="absolute inset-0 bg-[length:24px_24px] bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] pointer-events-none"></div>
         
-        <div className="p-8 md:p-10 max-w-6xl w-full mx-auto z-10">
+        <div className="p-6 md:p-10 max-w-6xl w-full mx-auto z-10 pb-10">
           
-          <div className="mb-8 border-b border-slate-800 pb-6">
-            <h2 className="text-3xl font-light tracking-widest uppercase text-white mb-1">
-              Profile & <span className="font-bold text-sky-400">Security</span>
-            </h2>
-            <p className="text-[10px] text-slate-400 tracking-widest uppercase font-mono">Forensic Identity & Access Control</p>
+          {/* 🟢 MOBILE HEADER & MENU BUTTON */}
+          <div className="md:hidden flex items-center justify-between border-b border-slate-800/60 pb-4 mb-6">
+            <div className="flex items-center gap-3">
+              <FlaskConical className="w-8 h-8 text-sky-500" />
+              <h1 className="text-xs font-black tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-sky-400 text-[9px]">Lab Terminal</span></h1>
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(true)} 
+              className="p-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <Menu size={24} />
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fadeIn pb-12">
+          <div className="mb-8 border-b border-slate-800 pb-6">
+            <h2 className="text-2xl md:text-3xl font-light tracking-widest uppercase text-white mb-1">
+              Profile & <span className="font-bold text-sky-400">Security</span>
+            </h2>
+            <p className="text-[10px] md:text-xs text-slate-400 tracking-widest uppercase font-mono">Forensic Identity & Access Control</p>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 animate-fadeIn pb-12">
             
             {/* 🔴 COLUMN 1: Profile, Identity & Password */}
             <div className="space-y-8">
@@ -327,7 +381,7 @@ export default function LabTechSecurityPage() {
                   <Lock size={10} /> Locked by Admin
                 </div>
                 
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
+                <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
                   <ShieldCheck size={14} className="text-sky-400" /> Professional Identity
                 </h3>
                 
@@ -336,7 +390,7 @@ export default function LabTechSecurityPage() {
                     <label className="block text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">Full Name</label>
                     <input type="text" value={profile?.full_name} disabled className="w-full bg-slate-950/50 border border-slate-800/50 rounded-xl px-4 py-3 text-sm text-slate-500 cursor-not-allowed font-mono" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">Employee ID</label>
                       <input type="text" value={profile?.username} disabled className="w-full bg-slate-950/50 border border-slate-800/50 rounded-xl px-4 py-3 text-sm text-slate-500 cursor-not-allowed font-mono" />
@@ -351,7 +405,7 @@ export default function LabTechSecurityPage() {
 
               {/* Editable Contact Info */}
               <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
+                <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
                   <Smartphone size={14} className="text-emerald-400" /> Editable Contact Info
                 </h3>
                 
@@ -382,7 +436,7 @@ export default function LabTechSecurityPage() {
 
               {/* Change Password */}
               <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
+                <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
                   <Lock size={14} className="text-amber-400" /> Change Password
                 </h3>
                 <form onSubmit={handlePasswordChange} className="space-y-4">
@@ -390,7 +444,7 @@ export default function LabTechSecurityPage() {
                     <label className="block text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">Current Password</label>
                     <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500 font-mono" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">New Secure Password</label>
                       <input type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-amber-400 focus:outline-none focus:border-amber-500 font-mono" />
@@ -403,8 +457,8 @@ export default function LabTechSecurityPage() {
                     </div>
                   </div>
                   <button 
-                    type="submit" disabled={savingPassword}
-                    className="w-full mt-2 py-3 bg-amber-900/30 hover:bg-amber-800/50 border border-amber-700 text-amber-400 rounded-xl text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(245,158,11,0.1)] disabled:opacity-50 flex items-center justify-center gap-2"
+                    type="submit" disabled={savingPassword || !currentPassword || !newPassword}
+                    className="w-full mt-2 py-3 bg-amber-900/30 hover:bg-amber-800/50 border border-amber-700 text-amber-400 rounded-xl text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(245,158,11,0.1)] disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {savingPassword ? <Activity size={14} className="animate-spin" /> : "Update Password"}
                   </button>
@@ -418,52 +472,78 @@ export default function LabTechSecurityPage() {
               
               {/* 🛡️ MULTI-FACTOR AUTHENTICATION */}
               <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
+                <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
                   <ShieldCheck size={14} className="text-red-400" /> Multi-Factor Authentication
                 </h3>
 
                 <div className="space-y-4">
                   
+                  {/* 🟢 NEW: SMARTSHIELD AI TOGGLE */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-1.5 rounded-lg ${smartShieldEnabled ? 'bg-indigo-900/50 border border-indigo-500/30 text-indigo-400' : 'bg-slate-800 text-slate-500'}`}>
+                          <Fingerprint size={16} />
+                        </div>
+                        <div>
+                          <h4 className="text-[10px] font-bold text-white uppercase tracking-widest">SmartShield AI Guard</h4>
+                          <p className="text-[8px] text-slate-500 uppercase tracking-widest mt-0.5">XGBoost Behavioral Biometrics</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={handleSmartShieldToggle} disabled={togglingMfa}
+                        className={`relative w-10 h-5 shrink-0 rounded-full transition-colors ${smartShieldEnabled ? "bg-indigo-500" : "bg-slate-700"}`}
+                      >
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${smartShieldEnabled ? "translate-x-5" : "translate-x-0"}`}></div>
+                      </button>
+                    </div>
+                    {smartShieldEnabled && (
+                      <p className="text-[8px] font-mono text-indigo-400/80 bg-indigo-950/20 p-2 rounded-lg mt-2 border border-indigo-900/30 text-center">
+                        Silent behavioral analysis is active. Email OTP will only be requested if a bot or high-risk activity is detected.
+                      </p>
+                    )}
+                  </div>
+
                   {/* 1. Email MFA Toggle */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 md:p-5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800">
-                        <Mail size={16} className="text-slate-400" />
+                      <div className={`p-1.5 rounded-lg ${mfaEmailEnabled ? 'bg-cyan-900/50 border border-cyan-500/30 text-cyan-400' : 'bg-slate-800 text-slate-500'}`}>
+                        <Mail size={16} />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-white uppercase tracking-widest">Email Validation</p>
-                        <p className="text-[9px] text-slate-500 uppercase tracking-widest">Receive OTPs to {profile?.email}</p>
+                        <p className="text-[10px] font-bold text-white uppercase tracking-widest">Email Validation</p>
+                        <p className="text-[8px] text-slate-500 uppercase tracking-widest mt-0.5 truncate max-w-[120px] md:max-w-[200px]">Receive OTPs to {profile?.email}</p>
                       </div>
                     </div>
                     <button 
                       onClick={handleEmailMfaToggle} disabled={togglingMfa}
-                      className={`relative w-10 h-5 rounded-full transition-colors ${mfaEmailEnabled ? "bg-sky-500" : "bg-slate-700"}`}
+                      className={`shrink-0 w-10 h-5 rounded-full relative transition-colors ${mfaEmailEnabled ? "bg-cyan-500" : "bg-slate-700"}`}
                     >
                       <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${mfaEmailEnabled ? "translate-x-5" : "translate-x-0"}`}></div>
                     </button>
                   </div>
 
                   {/* 2. Authenticator App Toggle/Setup */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5">
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 md:p-5">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800">
-                          <SmartphoneNfc size={16} className="text-slate-400" />
+                        <div className={`p-1.5 rounded-lg ${mfaAppEnabled ? 'bg-emerald-900/50 border border-emerald-500/30 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                          <SmartphoneNfc size={16} />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-white uppercase tracking-widest">Authenticator App</p>
-                          <p className="text-[9px] text-slate-500 uppercase tracking-widest">Google Authenticator / Authy</p>
+                          <p className="text-[10px] font-bold text-white uppercase tracking-widest">Authenticator App</p>
+                          <p className="text-[8px] text-slate-500 uppercase tracking-widest mt-0.5">Google Auth / Authy</p>
                         </div>
                       </div>
                       
                       {!mfaAppEnabled && setupStep === 0 && (
-                        <button onClick={handleSetupAppMfa} className="px-4 py-2 bg-sky-900/30 hover:bg-sky-800/50 text-sky-400 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-sky-900/50 transition-colors">
+                        <button onClick={handleSetupAppMfa} className="px-3 md:px-4 py-1.5 bg-sky-900/30 hover:bg-sky-800/50 text-sky-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest rounded-lg border border-sky-900/50 transition-colors">
                           Enable
                         </button>
                       )}
                       
                       {mfaAppEnabled && (
-                        <button onClick={handleDisableAppMfa} className="px-4 py-2 bg-red-900/30 hover:bg-red-800/50 text-red-400 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-red-900/50 transition-colors">
+                        <button onClick={handleDisableAppMfa} className="px-3 md:px-4 py-1.5 bg-red-900/30 hover:bg-red-800/50 text-red-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest rounded-lg border border-red-900/50 transition-colors">
                           Disable
                         </button>
                       )}
@@ -508,7 +588,7 @@ export default function LabTechSecurityPage() {
                     <div className="bg-amber-950/20 border border-amber-900/50 rounded-xl p-4 flex items-start gap-3 mt-4">
                       <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
                       <p className="text-[9px] text-amber-500 uppercase tracking-widest font-bold leading-relaxed">
-                        Your account is vulnerable. Enable 2FA (Email or Authenticator) to prevent unauthorized access.
+                        Your account is vulnerable. Enable 2FA or SmartShield to prevent unauthorized access.
                       </p>
                     </div>
                   )}
@@ -517,33 +597,33 @@ export default function LabTechSecurityPage() {
               </div>
 
               {/* Active Sessions Kill Switch */}
-              <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl">
-                <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-3">
-                  <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
-                    <Monitor size={14} className="text-red-400" /> Active Devices
+              <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl flex flex-col max-h-[500px]">
+                <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800 shrink-0">
+                  <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                    <Monitor size={14} className="text-sky-400" /> Active Devices
                   </h3>
                   <button 
-                    onClick={handleRevokeSessions}
-                    className="text-[9px] bg-red-950/50 text-red-400 border border-red-900 px-3 py-1.5 rounded-lg font-bold uppercase hover:bg-red-900 transition-colors flex items-center gap-1.5"
+                    onClick={handleRevokeSessions} disabled={sessions.length <= 1}
+                    className="text-[8px] md:text-[9px] font-bold uppercase tracking-widest text-red-400 bg-red-950/30 hover:bg-red-900/50 px-3 py-1.5 rounded-lg border border-red-900/50 transition-colors flex items-center gap-1.5 disabled:opacity-30"
                   >
-                    <Trash2 size={12}/> Kill Switch (Revoke All)
+                    <Trash2 size={12}/> Kill Switch
                   </button>
                 </div>
 
-                <div className="space-y-3 max-h-[160px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1">
                   {sessions.length === 0 ? (
-                    <p className="text-[10px] text-slate-500 font-mono uppercase text-center">No active sessions found.</p>
+                    <p className="text-[10px] text-slate-500 font-mono uppercase text-center py-4">No active sessions found.</p>
                   ) : (
                     sessions.map((sess, i) => (
                       <div key={sess.id || i} className={`p-4 rounded-xl flex items-center justify-between border ${sess.is_current ? 'bg-sky-950/20 border-sky-900/50' : 'bg-slate-950 border-slate-800'}`}>
                         <div>
-                          <p className="text-[11px] font-mono text-slate-300 flex items-center gap-2">
+                          <p className="text-[10px] md:text-[11px] font-mono text-slate-300 flex items-center gap-2 mb-1.5">
                             {sess.ip_address}
-                            {sess.is_current && <span className="bg-sky-500 text-slate-950 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase">Current Device</span>}
+                            {sess.is_current && <span className="bg-sky-500 text-slate-950 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">Current Device</span>}
                           </p>
-                          <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">{sess.user_agent}</p>
+                          <p className="text-[8px] md:text-[9px] text-slate-500 uppercase tracking-widest truncate max-w-[150px] md:max-w-[200px]">{sess.user_agent}</p>
                         </div>
-                        <Globe size={16} className="text-slate-600" />
+                        <Globe size={16} className="text-slate-600 shrink-0" />
                       </div>
                     ))
                   )}

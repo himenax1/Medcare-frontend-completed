@@ -7,16 +7,20 @@ import axios from "axios";
 import { 
   Stethoscope, LayoutDashboard, Users, ScrollText, UserCog, LogOut, 
   Activity, ShieldCheck, Lock, Smartphone, Mail, AlertTriangle, 
-  CheckCircle2, Trash2, Monitor, Globe, KeyRound
+  CheckCircle2, Trash2, Monitor, Globe, KeyRound,
+  Menu, X, Fingerprint 
 } from "lucide-react";
 
 export default function DoctorSecurityPage() {
   const router = useRouter();
   
-  // 🟢 Loaders & Messages
+  
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [sysMessage, setSysMessage] = useState({ text: "", type: "" });
+  
+  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // 🟢 Profile States
   const [profile, setProfile] = useState<any>(null);
@@ -43,9 +47,11 @@ export default function DoctorSecurityPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const strength = getPasswordStrength(newPassword);
 
-  // 🟢 MFA States (Exactly like Patient Portal)
+  // 🟢 MFA සහ SmartShield States
   const [mfaEmailEnabled, setMfaEmailEnabled] = useState(false);
   const [mfaAppEnabled, setMfaAppEnabled] = useState(false);
+  const [smartShieldEnabled, setSmartShieldEnabled] = useState(false); 
+
   const [qrUri, setQrUri] = useState("");
   const [totpSecret, setTotpSecret] = useState("");
   const [appVerifyCode, setAppVerifyCode] = useState("");
@@ -82,6 +88,7 @@ export default function DoctorSecurityPage() {
       // Sync MFA States
       setMfaEmailEnabled(profData.mfa_email_enabled || false);
       setMfaAppEnabled(profData.mfa_app_enabled || false);
+      setSmartShieldEnabled(profData.smartshield_enabled ?? true); 
 
       setSessions(sessionsRes.data);
     } catch (err) {
@@ -140,7 +147,27 @@ export default function DoctorSecurityPage() {
     }
   };
 
-  // 🚀 ACTION 3: Toggle Email MFA
+  // 🚀 ACTION 3: Toggle SmartShield (NEW)
+  const handleSmartShieldToggle = async () => {
+    setActionLoading(true);
+    const newStatus = !smartShieldEnabled;
+    try {
+      const token = localStorage.getItem("medcare_token");
+      await axios.post(`http://localhost:8000/auth/security/toggle-smartshield?enable=${newStatus}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSmartShieldEnabled(newStatus);
+      // 🟢 Mutual Exclusivity
+      if (newStatus) setMfaEmailEnabled(false);
+      showToast(`SmartShield Security has been ${newStatus ? 'enabled' : 'disabled'}.`, "success");
+    } catch (err: any) {
+      showToast(err.response?.data?.detail || "Failed to toggle SmartShield.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 🚀 ACTION 4: Toggle Email MFA
   const handleToggleEmailMfa = async () => {
     setActionLoading(true);
     const newStatus = !mfaEmailEnabled;
@@ -150,6 +177,8 @@ export default function DoctorSecurityPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMfaEmailEnabled(newStatus);
+      // 🟢 Mutual Exclusivity
+      if (newStatus) setSmartShieldEnabled(false);
       showToast(`Email MFA has been ${newStatus ? 'Enabled' : 'Disabled'}`, "success");
     } catch (err: any) {
       showToast(err.response?.data?.detail || "MFA toggle failed.", "error");
@@ -158,7 +187,7 @@ export default function DoctorSecurityPage() {
     }
   };
 
-  // 🚀 ACTION 4: Google Authenticator Logic (Brought from Patient Portal)
+  // 🚀 ACTION 5: Google Authenticator Logic
   const handleGenerateQr = async () => {
     setActionLoading(true);
     try {
@@ -216,7 +245,7 @@ export default function DoctorSecurityPage() {
     }
   };
 
-  // 🚀 ACTION 5: Revoke Remote Sessions (Kill Switch)
+  // 🚀 ACTION 6: Revoke Remote Sessions (Kill Switch)
   const handleRevokeSessions = async () => {
     if (!window.confirm("This will log out all other active devices immediately. Continue?")) return;
     setActionLoading(true);
@@ -253,36 +282,50 @@ export default function DoctorSecurityPage() {
       
       {/* Toast Notification */}
       {sysMessage.text && (
-        <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full text-xs font-bold tracking-widest uppercase shadow-2xl flex items-center gap-2 animate-fadeIn border ${
-          sysMessage.type === "success" ? "bg-emerald-950/80 text-emerald-400 border-emerald-900/50" : "bg-red-950/80 text-red-400 border-red-900/50"
+        <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-[70] px-6 py-3 w-[90%] md:w-auto text-center rounded-full text-[10px] md:text-xs font-bold tracking-widest uppercase shadow-2xl flex items-center justify-center gap-2 animate-fadeIn border ${
+          sysMessage.type === "success" ? "bg-emerald-950/90 text-emerald-400 border-emerald-900/50" : "bg-red-950/90 text-red-400 border-red-900/50"
         }`}>
-          {sysMessage.type === "success" ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+          {sysMessage.type === "success" ? <CheckCircle2 size={16} className="shrink-0" /> : <AlertTriangle size={16} className="shrink-0" />}
           {sysMessage.text}
         </div>
       )}
 
-      {/* 🟢 DOCTOR SIDEBAR */}
-      <div className="w-72 bg-slate-950 border-r border-slate-800/60 flex flex-col justify-between hidden md:flex z-20 shadow-[4px_0_24px_rgba(0,0,0,0.4)]">
+      {/* 🟢 MOBILE OVERLAY BACKGROUND */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* 🟢 DOCTOR SIDEBAR (Responsive) */}
+      <div className={`fixed inset-y-0 left-0 w-72 bg-slate-950 border-r border-slate-800/60 flex flex-col justify-between z-50 shadow-[4px_0_24px_rgba(0,0,0,0.4)] transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div>
-          <div className="p-6 border-b border-slate-800/60 flex items-center gap-3 bg-slate-900/20">
-            <Stethoscope className="w-10 h-10 text-sky-400 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]" />
-            <div>
-              <h1 className="text-sm font-extrabold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-sky-400 text-[10px]">Clinical Workspace</span></h1>
+          <div className="p-6 border-b border-slate-800/60 flex items-center justify-between bg-slate-900/20">
+            <div className="flex items-center gap-3">
+              <Stethoscope className="w-10 h-10 text-sky-400 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]" />
+              <div>
+                <h1 className="text-sm font-extrabold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-sky-400 text-[10px]">Clinical Workspace</span></h1>
+              </div>
             </div>
+            {/* Phone  */}
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
+              <X size={24} />
+            </button>
           </div>
           
           <div className="p-4 space-y-2 mt-4">
-            <Link href="/doctor" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
+            <Link href="/doctor" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
               <LayoutDashboard size={18} /> The Clinical Hub
             </Link>
-            <Link href="/doctor/queue" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
+            <Link href="/doctor/queue" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
               <Users size={18} /> Today's Queue
             </Link>
-            <Link href="/doctor/logs" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
+            <Link href="/doctor/logs" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
               <ScrollText size={18} /> Activity Logs
             </Link>
             {/* Active Page */}
-            <div className="w-full flex items-center gap-3 px-4 py-3 bg-sky-900/30 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-bold tracking-widest uppercase shadow-[0_0_20px_rgba(56,189,248,0.15)] transition-all">
+            <div className="w-full flex items-center gap-3 px-4 py-3 bg-sky-900/30 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-bold tracking-widest uppercase shadow-[0_0_20px_rgba(56,189,248,0.15)] transition-all cursor-default">
               <UserCog size={18} /> Profile & Security
             </div>
           </div>
@@ -295,21 +338,35 @@ export default function DoctorSecurityPage() {
       </div>
 
       {/* 🟢 MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col h-screen overflow-y-auto relative bg-slate-950">
-        <div className="absolute top-0 right-0 w-[800px] h-[500px] bg-sky-500/5 rounded-full blur-[150px] pointer-events-none"></div>
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto relative bg-slate-950 w-full">
+        <div className="absolute top-0 right-0 w-[500px] md:w-[800px] h-[500px] bg-sky-500/5 rounded-full blur-[150px] pointer-events-none"></div>
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
         
-        <div className="p-8 md:p-10 max-w-6xl w-full mx-auto z-10">
+        <div className="p-6 md:p-10 max-w-6xl w-full mx-auto z-10 pb-10">
           
+          {/* 🟢 MOBILE HEADER & MENU BUTTON */}
+          <div className="md:hidden flex items-center justify-between border-b border-slate-800/60 pb-4 mb-6">
+            <div className="flex items-center gap-3">
+              <Stethoscope className="w-8 h-8 text-sky-500" />
+              <h1 className="text-xs font-black tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-sky-400 text-[9px]">Clinical Workspace</span></h1>
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(true)} 
+              className="p-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <Menu size={24} />
+            </button>
+          </div>
+
           <div className="mb-8 border-b border-slate-800 pb-6 flex items-center gap-4">
-            <div className="w-12 h-12 bg-sky-900/20 border border-sky-900/50 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-sky-900/20 border border-sky-900/50 rounded-xl flex items-center justify-center shrink-0">
               <ShieldCheck className="w-6 h-6 text-sky-400" />
             </div>
             <div>
-              <h2 className="text-3xl font-light tracking-widest uppercase text-white mb-1">
+              <h2 className="text-2xl md:text-3xl font-light tracking-widest uppercase text-white mb-1">
                 Profile & <span className="font-bold text-sky-400">Security</span>
               </h2>
-              <p className="text-[10px] text-slate-400 tracking-widest uppercase font-mono">Account Integrity & Access Control</p>
+              <p className="text-[10px] md:text-xs text-slate-400 tracking-widest uppercase font-mono">Account Integrity & Access Control</p>
             </div>
           </div>
 
@@ -324,7 +381,7 @@ export default function DoctorSecurityPage() {
                   <Lock size={10} /> Locked by Admin
                 </div>
                 
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
+                <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
                   <UserCog size={14} className="text-sky-400" /> Professional Identity
                 </h3>
                 
@@ -333,7 +390,7 @@ export default function DoctorSecurityPage() {
                     <label className="block text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">Full Name</label>
                     <input type="text" value={profile?.full_name} disabled className="w-full bg-slate-950/50 border border-slate-800/50 rounded-xl px-4 py-3 text-sm text-slate-500 cursor-not-allowed font-mono" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">SLMC Number</label>
                       <input type="text" value={profile?.slmc_number || "N/A"} disabled className="w-full bg-slate-950/50 border border-slate-800/50 rounded-xl px-4 py-3 text-sm text-slate-500 cursor-not-allowed font-mono" />
@@ -348,7 +405,7 @@ export default function DoctorSecurityPage() {
 
               {/* Editable Contact Info */}
               <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
+                <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
                   <Smartphone size={14} className="text-emerald-400" /> Editable Contact Info
                 </h3>
                 
@@ -371,7 +428,7 @@ export default function DoctorSecurityPage() {
 
                 <button 
                   onClick={handleProfileUpdate} disabled={actionLoading}
-                  className="w-full py-3 bg-emerald-900/30 hover:bg-emerald-800/50 border border-emerald-700 text-emerald-400 rounded-xl text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(16,185,129,0.1)] disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-3 bg-emerald-900/30 hover:bg-emerald-800/50 border border-emerald-700 text-emerald-400 rounded-xl text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(16,185,129,0.1)] disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {actionLoading ? <Activity size={14} className="animate-spin" /> : "Save Changes"}
                 </button>
@@ -379,7 +436,7 @@ export default function DoctorSecurityPage() {
 
               {/* Change Password */}
               <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2 mb-6 pb-4 border-b border-slate-800">
+                <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
                   <KeyRound size={16} className="text-red-400" /> Change Password
                 </h3>
                 
@@ -391,7 +448,7 @@ export default function DoctorSecurityPage() {
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500 font-mono"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-2">New Secure Password</label>
                       <input 
@@ -411,7 +468,7 @@ export default function DoctorSecurityPage() {
                   </div>
                   <button 
                     type="submit" disabled={actionLoading || !currentPassword || !newPassword}
-                    className="w-full py-4 bg-red-950/40 hover:bg-red-900 border border-red-900 text-red-100 rounded-xl text-xs font-bold tracking-widest uppercase transition-all mt-4 disabled:opacity-50"
+                    className="w-full py-4 bg-red-950/40 hover:bg-red-900 border border-red-900 text-red-100 rounded-xl text-[10px] md:text-xs font-bold tracking-widest uppercase transition-all mt-4 disabled:opacity-50"
                   >
                     Update Password
                   </button>
@@ -420,88 +477,118 @@ export default function DoctorSecurityPage() {
 
             </div>
 
-            {/* 🔴 COLUMN 2: MFA & Sessions (The EXACT Patient Components) */}
+            {/* 🔴 COLUMN 2: MFA & Sessions */}
             <div className="space-y-8">
               
               {/* Multi-Factor Authentication (MFA) */}
               <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2 mb-6 pb-4 border-b border-slate-800">
+                <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-3">
                   <ShieldCheck size={16} className="text-sky-400" /> Multi-Factor Authentication
                 </h3>
 
+                {/* 🟢 NEW: SMARTSHIELD AI TOGGLE */}
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-1.5 rounded-lg ${smartShieldEnabled ? 'bg-indigo-900/50 border border-indigo-500/30 text-indigo-400' : 'bg-slate-800 text-slate-500'}`}>
+                        <Fingerprint size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-[10px] font-bold text-white uppercase tracking-widest">SmartShield AI Guard</h4>
+                        <p className="text-[8px] text-slate-500 uppercase tracking-widest mt-0.5">XGBoost Behavioral Biometrics</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={handleSmartShieldToggle} disabled={actionLoading}
+                      className={`relative w-10 h-5 shrink-0 rounded-full transition-colors ${smartShieldEnabled ? "bg-indigo-500" : "bg-slate-700"}`}
+                    >
+                      <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${smartShieldEnabled ? "translate-x-5" : "translate-x-0"}`}></div>
+                    </button>
+                  </div>
+                  {smartShieldEnabled && (
+                    <p className="text-[8px] font-mono text-indigo-400/80 bg-indigo-950/20 p-2 rounded-lg mt-2 border border-indigo-900/30 text-center">
+                      Silent behavioral analysis is active. Email OTP will only be requested if a bot or high-risk activity is detected.
+                    </p>
+                  )}
+                </div>
+
                 {/* Email OTP Toggle */}
-                <div className="flex items-center justify-between p-5 bg-slate-950 border border-slate-800 rounded-2xl mb-4">
+                <div className="flex items-center justify-between p-4 md:p-5 bg-slate-950 border border-slate-800 rounded-2xl mb-4">
                   <div className="flex items-center gap-3">
-                    <Mail size={20} className={mfaEmailEnabled ? "text-emerald-400" : "text-slate-500"} />
+                    <div className={`p-1.5 rounded-lg ${mfaEmailEnabled ? 'bg-emerald-900/50 border border-emerald-500/30 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                      <Mail size={16} />
+                    </div>
                     <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-widest">Email Validation</h4>
-                      <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">Receive OTPs to {editEmail || "your email"}</p>
+                      <h4 className="text-[10px] font-bold text-white uppercase tracking-widest">Email Validation</h4>
+                      <p className="text-[8px] text-slate-500 uppercase tracking-widest mt-0.5 truncate max-w-[120px] md:max-w-[200px]">Receive OTPs to {editEmail || "your email"}</p>
                     </div>
                   </div>
                   <button 
                     onClick={handleToggleEmailMfa} disabled={actionLoading}
-                    className={`w-12 h-6 rounded-full relative transition-colors ${mfaEmailEnabled ? "bg-emerald-500" : "bg-slate-700"}`}
+                    className={`shrink-0 w-10 h-5 rounded-full relative transition-colors ${mfaEmailEnabled ? "bg-emerald-500" : "bg-slate-700"}`}
                   >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${mfaEmailEnabled ? "left-7" : "left-1"}`}></div>
+                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${mfaEmailEnabled ? "translate-x-5" : "translate-x-0"}`}></div>
                   </button>
                 </div>
 
                 {/* Google Authenticator Setup */}
-                <div className="p-5 bg-slate-950 border border-slate-800 rounded-2xl">
+                <div className="p-4 md:p-5 bg-slate-950 border border-slate-800 rounded-2xl">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <Smartphone size={20} className={mfaAppEnabled ? "text-emerald-400" : "text-slate-500"} />
-                      <h4 className="text-xs font-bold text-white uppercase tracking-widest">Authenticator App</h4>
+                      <div className={`p-1.5 rounded-lg ${mfaAppEnabled ? 'bg-sky-900/50 border border-sky-500/30 text-sky-400' : 'bg-slate-800 text-slate-500'}`}>
+                        <Smartphone size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-[10px] font-bold text-white uppercase tracking-widest">Authenticator App</h4>
+                        <p className="text-[8px] text-slate-500 uppercase tracking-widest mt-0.5">Google Auth (TOTP)</p>
+                      </div>
                     </div>
+                    
+                    {!mfaAppEnabled && setupStep === "idle" && (
+                      <button 
+                        onClick={handleGenerateQr} disabled={actionLoading}
+                        className="px-3 md:px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-[8px] md:text-[9px] font-bold uppercase tracking-widest rounded border border-slate-700 transition-colors"
+                      >
+                        Enable
+                      </button>
+                    )}
+                    
                     {mfaAppEnabled && (
-                      <span className="px-2 py-1 bg-emerald-950/50 text-emerald-400 border border-emerald-900 rounded text-[9px] font-bold uppercase tracking-widest">Active</span>
+                      <button 
+                        onClick={handleDisableAppMfa} disabled={actionLoading}
+                        className="px-3 md:px-4 py-1.5 bg-red-900/30 hover:bg-red-800/50 text-red-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest rounded border border-red-900/50 transition-colors"
+                      >
+                        Disable
+                      </button>
                     )}
                   </div>
 
-                  {!mfaAppEnabled && setupStep === "idle" && (
-                    <button 
-                      onClick={handleGenerateQr} disabled={actionLoading}
-                      className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-bold tracking-widest uppercase transition-colors"
-                    >
-                      Step 1: Generate QR Code
-                    </button>
-                  )}
-
                   {!mfaAppEnabled && setupStep === "qr" && (
-                    <div className="flex flex-col items-center bg-white p-6 rounded-xl animate-fadeIn">
+                    <div className="flex flex-col items-center bg-white p-4 md:p-6 rounded-xl animate-fadeIn">
                       <img 
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUri)}`} 
                         alt="QR Code" 
-                        className="mb-4 w-40 h-40"
+                        className="mb-4 w-32 h-32 md:w-40 md:h-40"
                       />
-                      <p className="text-[10px] text-slate-800 font-bold mb-4 font-mono">Secret: {totpSecret}</p>
+                      <p className="text-[9px] md:text-[10px] text-slate-800 font-bold mb-4 font-mono break-all text-center px-2">Secret: {totpSecret}</p>
                       <input 
-                        type="text" value={appVerifyCode} onChange={(e) => setAppVerifyCode(e.target.value)}
+                        type="text" value={appVerifyCode} onChange={(e) => setAppVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                         placeholder="Enter 6-digit code" maxLength={6}
                         className="w-full bg-slate-100 border border-slate-300 text-slate-900 rounded-lg px-4 py-3 text-center text-sm font-mono focus:outline-none focus:border-sky-500 mb-3 tracking-widest"
                       />
                       <div className="flex gap-2 w-full">
-                        <button onClick={() => setSetupStep("idle")} className="flex-1 py-2.5 bg-slate-200 text-slate-600 rounded-lg text-[10px] font-bold uppercase">Cancel</button>
-                        <button onClick={handleVerifyAppMfa} disabled={actionLoading || appVerifyCode.length !== 6} className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold uppercase transition-colors">Verify Code</button>
+                        <button onClick={() => setSetupStep("idle")} className="flex-1 py-2.5 bg-slate-200 text-slate-600 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest">Cancel</button>
+                        <button onClick={handleVerifyAppMfa} disabled={actionLoading || appVerifyCode.length !== 6} className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest disabled:opacity-50 transition-colors">Verify Code</button>
                       </div>
                     </div>
                   )}
-
-                  {mfaAppEnabled && (
-                    <button 
-                      onClick={handleDisableAppMfa} disabled={actionLoading}
-                      className="w-full py-3 bg-red-950/30 hover:bg-red-900/50 border border-red-900/50 text-red-400 rounded-xl text-[10px] font-bold tracking-widest uppercase transition-colors"
-                    >
-                      Disable Authenticator
-                    </button>
-                  )}
                 </div>
 
-                {!mfaEmailEnabled && !mfaAppEnabled && (
+                {!mfaEmailEnabled && !mfaAppEnabled && !smartShieldEnabled && (
                   <div className="mt-4 p-4 border border-amber-900/50 bg-amber-950/20 rounded-xl flex items-start gap-3">
                     <AlertTriangle size={16} className="text-amber-500 shrink-0" />
                     <p className="text-[9px] text-amber-200/80 font-bold uppercase tracking-widest leading-relaxed">
-                      Your account is vulnerable. Enable 2FA to prevent unauthorized access.
+                      Your account is vulnerable. Enable 2FA or SmartShield to prevent unauthorized access.
                     </p>
                   </div>
                 )}
@@ -510,14 +597,14 @@ export default function DoctorSecurityPage() {
               {/* Active Sessions (Kill Switch) */}
               <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl flex flex-col max-h-[500px]">
                 <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800 shrink-0">
-                  <h3 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                  <h3 className="text-[10px] md:text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
                     <Monitor size={14} className="text-sky-400" /> Active Devices
                   </h3>
                   <button 
                     onClick={handleRevokeSessions} disabled={actionLoading || sessions.length <= 1}
-                    className="text-[9px] font-bold uppercase tracking-widest text-red-400 bg-red-950/30 hover:bg-red-900/50 px-3 py-1.5 rounded-lg border border-red-900/50 transition-colors flex items-center gap-1 disabled:opacity-30"
+                    className="text-[8px] md:text-[9px] font-bold uppercase tracking-widest text-red-400 bg-red-950/30 hover:bg-red-900/50 px-3 py-1.5 rounded-lg border border-red-900/50 transition-colors flex items-center gap-1 disabled:opacity-30"
                   >
-                    <Trash2 size={12}/> Kill Switch (Revoke All)
+                    <Trash2 size={12}/> Kill Switch
                   </button>
                 </div>
                 
@@ -528,13 +615,13 @@ export default function DoctorSecurityPage() {
                     sessions.map((sess, i) => (
                       <div key={sess.id || i} className={`p-4 rounded-xl flex items-center justify-between border transition-all ${sess.is_current ? 'bg-sky-950/10 border-sky-900/30' : 'bg-slate-950 border-slate-800'}`}>
                         <div>
-                          <p className="text-[11px] font-mono text-slate-300 flex items-center gap-2 mb-1.5">
+                          <p className="text-[10px] md:text-[11px] font-mono text-slate-300 flex items-center gap-2 mb-1.5">
                             {sess.ip_address}
                             {sess.is_current && <span className="bg-sky-500/20 text-sky-400 border border-sky-500/30 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">Current Device</span>}
                           </p>
-                          <p className="text-[9px] text-slate-500 uppercase tracking-widest">{sess.user_agent}</p>
+                          <p className="text-[8px] md:text-[9px] text-slate-500 uppercase tracking-widest truncate max-w-[150px] md:max-w-[200px]">{sess.user_agent}</p>
                         </div>
-                        <Globe size={16} className="text-slate-600" />
+                        <Globe size={16} className="text-slate-600 shrink-0" />
                       </div>
                     ))
                   )}

@@ -1,6 +1,5 @@
 "use client";
 
-import { formatDateTime } from "@/utils/dateFormatter";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +7,7 @@ import axios from "axios";
 import { 
   ShieldCheck, Home, LogOut, Activity, ArrowLeft, 
   History as HistoryIcon, Stethoscope, Calendar, FileType2, AlertCircle, FileText,
-  CreditCard, Lock, User
+  CreditCard, Lock, User, Clock
 } from "lucide-react";
 
 export default function MedicalHistoryPage() {
@@ -16,8 +15,6 @@ export default function MedicalHistoryPage() {
   const [medicalHistory, setMedicalHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  
-  
   const [patientName, setPatientName] = useState("Patient");
 
   useEffect(() => {
@@ -28,7 +25,6 @@ export default function MedicalHistoryPage() {
     fetchProfile(token); 
   }, [router]);
 
-  
   const fetchProfile = async (token: string) => {
     try {
       const response = await axios.get("http://localhost:8000/patients/me/profile", {
@@ -38,7 +34,6 @@ export default function MedicalHistoryPage() {
     } catch (err) {}
   };
 
-  // 🚀 1. 100% Correct API Endpoint for fetching History
   const fetchMedicalHistory = async (token: string) => {
     try {
       const response = await axios.get("http://localhost:8000/patients/me/history", {
@@ -61,13 +56,28 @@ export default function MedicalHistoryPage() {
     }
   };
 
+  // 🟢 Safe Local Date & Real Time Formatter (Prevents the UTC +05:30 AM bug!)
+  const formatHistoryTimestamp = (dateStr: string, timeStr?: string | null) => {
+    if (!dateStr) return "N/A";
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const dateObj = new Date(year, month - 1, day);
+    const formattedDate = dateObj.toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    }).toUpperCase();
+
+    return timeStr ? `${formattedDate} • ${timeStr}` : formattedDate;
+  };
+
   const handleLogout = () => { localStorage.removeItem("medcare_token"); router.push("/login"); };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans overflow-hidden">
       
-      {/* 🟢 FULL SIDEBAR NAVIGATION (100% Restored) */}
-      <div className="w-72 bg-slate-950 border-r border-slate-800/60 flex flex-col justify-between hidden md:flex z-20 shadow-[4px_0_24px_rgba(0,0,0,0.4)] print:hidden">        <div>
+      {/* 🟢 FULL SIDEBAR NAVIGATION */}
+      <div className="w-72 bg-slate-950 border-r border-slate-800/60 flex flex-col justify-between hidden md:flex z-20 shadow-[4px_0_24px_rgba(0,0,0,0.4)] print:hidden">
+        <div>
           <div className="p-6 border-b border-slate-800/60 flex items-center gap-3 bg-slate-900/20">
             <ShieldCheck className="w-10 h-10 text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]" />
             <div>
@@ -79,7 +89,6 @@ export default function MedicalHistoryPage() {
               <Home size={18} /> Home
             </Link>
             
-            {/* Active Link */}
             <div className="w-full flex items-center gap-3 px-4 py-3 bg-cyan-900/30 text-cyan-400 border border-cyan-500/30 rounded-xl text-xs font-bold tracking-widest uppercase shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all">
               <Activity size={18} /> My Health Vault
             </div>
@@ -105,7 +114,8 @@ export default function MedicalHistoryPage() {
       </div>
 
       {/* 🟢 MAIN CONTENT */}
-      <div className="flex-1 flex flex-col h-screen overflow-y-auto p-8 md:p-12 w-full relative print:h-auto print:overflow-visible print:bg-white print:text-black">        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto p-8 md:p-12 w-full relative print:h-auto print:overflow-visible print:bg-white print:text-black">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none"></div>
 
         <Link href="/dashboard/health-vault" className="inline-flex items-center gap-2 text-slate-500 hover:text-cyan-400 mb-6 text-[10px] font-bold uppercase tracking-widest z-10 transition-colors">
           <ArrowLeft size={14} /> Back to Health Vault
@@ -159,13 +169,19 @@ export default function MedicalHistoryPage() {
                       
                       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 pb-6 border-b border-slate-800/50">
                         <div>
-                          <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest block mb-2 md:hidden">{formatDateTime(record.date)}</span>                           <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-1">
+                          <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest block mb-2 md:hidden font-mono">
+                            {formatHistoryTimestamp(record.date, record.time)}
+                          </span>
+                          <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-1">
                             <Stethoscope size={16} className={record.status === "No Show" ? "text-amber-500" : "text-slate-400"} /> Dr. {record.doctor_name}
                           </h3>
                         </div>
                         <div className="hidden md:flex items-center gap-2 bg-emerald-950/30 border border-emerald-900/50 px-4 py-1.5 rounded-full">
-                          <Calendar size={12} className="text-emerald-500" />
-                          <span className="text-[10px] text-emerald-200 font-bold uppercase tracking-widest">{formatDateTime(record.date)}</span>                        </div>
+                          <Clock size={12} className="text-emerald-500" />
+                          <span className="text-[10px] text-emerald-200 font-bold uppercase tracking-widest font-mono">
+                            {formatHistoryTimestamp(record.date, record.time)}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="space-y-6">

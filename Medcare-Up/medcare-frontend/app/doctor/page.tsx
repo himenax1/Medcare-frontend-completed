@@ -7,7 +7,8 @@ import axios from "axios";
 import { 
   Stethoscope, LayoutDashboard, Users, ScrollText, UserCog, LogOut, 
   Activity, CheckCircle2, Clock, AlertTriangle, Pill, Microscope, 
-  UserCheck, BarChart3, Filter, ShieldAlert
+  UserCheck, BarChart3, Filter, ShieldAlert,
+  Menu, X 
 } from "lucide-react";
 
 export default function DoctorClinicalHub() {
@@ -16,6 +17,9 @@ export default function DoctorClinicalHub() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("today"); 
   const [doctorName, setDoctorName] = useState("");
+
+  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [workload, setWorkload] = useState({ pending: 0, completed: 0, total: 0 });
   const [attendance, setAttendance] = useState({ attended: 0, noShows: 0 });
@@ -46,7 +50,6 @@ export default function DoctorClinicalHub() {
 
       const data = response.data;
       
-      // Setting states directly from the unified backend JSON
       setDoctorName(data.doctor_name);
       
       setWorkload({
@@ -85,27 +88,41 @@ export default function DoctorClinicalHub() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans overflow-hidden selection:bg-sky-500/30">
       
-      {/* 🟢 DOCTOR SIDEBAR */}
-      <div className="w-72 bg-slate-950 border-r border-slate-800/60 flex flex-col justify-between hidden md:flex z-20 shadow-[4px_0_24px_rgba(0,0,0,0.4)]">
+      {/* 🟢 MOBILE OVERLAY BACKGROUND */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* 🟢 DOCTOR SIDEBAR  */}
+      <div className={`fixed inset-y-0 left-0 w-72 bg-slate-950 border-r border-slate-800/60 flex flex-col justify-between z-50 shadow-[4px_0_24px_rgba(0,0,0,0.4)] transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div>
-          <div className="p-6 border-b border-slate-800/60 flex items-center gap-3 bg-slate-900/20">
-            <Stethoscope className="w-10 h-10 text-sky-400 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]" />
-            <div>
-              <h1 className="text-sm font-extrabold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-sky-400 text-[10px]">Clinical Workspace</span></h1>
+          <div className="p-6 border-b border-slate-800/60 flex items-center justify-between bg-slate-900/20">
+            <div className="flex items-center gap-3">
+              <Stethoscope className="w-10 h-10 text-sky-400 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]" />
+              <div>
+                <h1 className="text-sm font-extrabold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-sky-400 text-[10px]">Clinical Workspace</span></h1>
+              </div>
             </div>
+            {/* Phone Sidebar Close  */}
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
+              <X size={24} />
+            </button>
           </div>
           
           <div className="p-4 space-y-2 mt-4">
-            <div className="w-full flex items-center gap-3 px-4 py-3 bg-sky-900/30 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-bold tracking-widest uppercase shadow-[0_0_20px_rgba(56,189,248,0.15)] transition-all">
+            <div className="w-full flex items-center gap-3 px-4 py-3 bg-sky-900/30 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-bold tracking-widest uppercase shadow-[0_0_20px_rgba(56,189,248,0.15)] transition-all cursor-default">
               <LayoutDashboard size={18} /> The Clinical Hub
             </div>
-            <Link href="/doctor/queue" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
+            <Link href="/doctor/queue" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
               <Users size={18} /> Today's Queue
             </Link>
-            <Link href="/doctor/logs" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
+            <Link href="/doctor/logs" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
               <ScrollText size={18} /> Activity Logs
             </Link>
-            <Link href="/doctor/security" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
+            <Link href="/doctor/security" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-900/50">
               <UserCog size={18} /> Profile & Security
             </Link>
           </div>
@@ -121,24 +138,39 @@ export default function DoctorClinicalHub() {
       <div className="flex-1 flex flex-col h-screen overflow-y-auto relative bg-slate-950">
         <div className="absolute top-0 right-0 w-[800px] h-[500px] bg-sky-500/5 rounded-full blur-[150px] pointer-events-none"></div>
         
-        <div className="p-8 md:p-10 max-w-7xl w-full mx-auto z-10">
+        {/* Phone Padding (p-5 md:p-10)  */}
+        <div className="p-5 md:p-10 max-w-7xl w-full mx-auto z-10">
           
+          {/* 🟢 MOBILE HEADER & MENU BUTTON */}
+          <div className="md:hidden flex items-center justify-between mb-6 pb-4 border-b border-slate-800/60">
+            <div className="flex items-center gap-3">
+              <Stethoscope className="w-8 h-8 text-sky-500" />
+              <h1 className="text-xs font-extrabold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-sky-400 text-[9px]">Clinical Workspace</span></h1>
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(true)} 
+              className="p-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <Menu size={24} />
+            </button>
+          </div>
+
           <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
-              <h2 className="text-3xl font-light tracking-widest uppercase text-white mb-1">
+              <h2 className="text-2xl md:text-3xl font-light tracking-widest uppercase text-white mb-1">
                 Welcome, <span className="font-bold text-sky-400">{doctorName || "Doctor"}</span>
               </h2>
               <p className="text-[10px] text-slate-400 tracking-widest uppercase font-mono">Real-time Clinical & Workload Analytics</p>
             </div>
             
-            <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl p-1.5 shadow-lg">
-              <div className="pl-3 pr-2 flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+            <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl p-1.5 shadow-lg w-full md:w-auto">
+              <div className="pl-3 pr-2 flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-widest whitespace-nowrap">
                 <Filter size={12} /> Time Period:
               </div>
               <select 
                 value={period} 
                 onChange={(e) => setPeriod(e.target.value)}
-                className="bg-slate-950 border border-slate-700 text-[10px] text-sky-400 font-bold uppercase tracking-widest px-4 py-2 rounded-lg outline-none cursor-pointer hover:border-sky-500 transition-colors appearance-none"
+                className="bg-slate-950 border border-slate-700 w-full md:w-auto text-[10px] text-sky-400 font-bold uppercase tracking-widest px-4 py-2 rounded-lg outline-none cursor-pointer hover:border-sky-500 transition-colors appearance-none"
               >
                 <option value="today">Today (Live)</option>
                 <option value="weekly">This Week</option>
@@ -165,7 +197,7 @@ export default function DoctorClinicalHub() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Workload Gauge */}
-                <div className="lg:col-span-2 bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-8 flex flex-col justify-between shadow-xl">
+                <div className="lg:col-span-2 bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 flex flex-col justify-between shadow-xl">
                   <div className="mb-6 flex justify-between items-start">
                     <div>
                       <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-1">
@@ -175,7 +207,7 @@ export default function DoctorClinicalHub() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                     <div className="bg-slate-950/50 border border-slate-800/50 p-5 rounded-2xl text-center">
                       <span className="text-[10px] text-slate-500 uppercase tracking-widest block mb-2 font-bold">Total Slots</span>
                       <span className="text-2xl font-mono text-white">{workload.total}</span>
@@ -204,7 +236,7 @@ export default function DoctorClinicalHub() {
                 </div>
 
                 {/* DDI Override Stats */}
-                <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-8 flex flex-col justify-center items-center text-center relative overflow-hidden group shadow-xl">
+                <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 flex flex-col justify-center items-center text-center relative overflow-hidden group shadow-xl">
                   <div className={`absolute inset-0 opacity-10 transition-opacity ${ddiOverrides > 0 ? 'bg-red-500 group-hover:opacity-20' : 'bg-slate-500'}`}></div>
                   <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 z-10 border ${ddiOverrides > 0 ? 'bg-red-950/50 border-red-900/80 text-red-500' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>
                     <AlertTriangle size={32} />
@@ -226,7 +258,7 @@ export default function DoctorClinicalHub() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
                 {/* Attendance Analytics */}
-                <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-8 shadow-xl">
+                <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl">
                   <div className="mb-6">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-1">
                       <UserCheck size={14} className="text-emerald-400" /> Attendance Analytics
@@ -262,7 +294,7 @@ export default function DoctorClinicalHub() {
                 </div>
 
                 {/* Treatment Patterns */}
-                <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-8 shadow-xl">
+                <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl p-6 md:p-8 shadow-xl">
                   <div className="mb-6 flex justify-between items-start">
                     <div>
                       <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-1">
@@ -271,7 +303,7 @@ export default function DoctorClinicalHub() {
                       <p className="text-[10px] text-slate-600 font-mono uppercase">Top prescribed items ({period})</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-800/50">
                       <h4 className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-slate-800 pb-2">
                         <Pill size={12} className="text-sky-400" /> Top Medicines

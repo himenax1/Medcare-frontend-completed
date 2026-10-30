@@ -53,57 +53,36 @@ export default function LabReportsPage() {
 
   const handleLogout = () => { localStorage.removeItem("medcare_token"); router.push("/login"); };
 
-  const handleDownload = async (testId: number, testName: string, date: string) => {
-  try {
-    const token = localStorage.getItem("medcare_token");
-    if (!token) return;
-
-    const response = await axios.get(`http://localhost:8000/patients/me/reports/${testId}/download`, {
-      headers: { Authorization: `Bearer ${token}` },
-      responseType: "blob"
-    });
-
-    const contentType = response.headers["content-type"];
-    const ext = contentType === "application/pdf" ? "pdf" : "png";
-
-    const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = `MedCare_${testName.replace(/\s+/g, '_')}_${date}.${ext}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(blobUrl);
-  } catch (err) {
-    console.error("Secure download failed:", err);
-  }
-};
+  const handleDownload = async (fileUrl: string, testName: string, date: string) => {
+    if (!fileUrl) return;
+    try {
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `MedCare_${testName.replace(/\s+/g, '_')}_${date}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      window.open(fileUrl, '_blank');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans overflow-hidden">
       
-      {/* Report Viewer Modal (PNG & PDF Support) */}
-{selectedImage && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-fadeIn">
-    <button onClick={() => setSelectedImage(null)} className="absolute top-6 right-6 p-3 bg-slate-900 border border-slate-700 text-slate-400 hover:text-white hover:bg-red-900/50 hover:border-red-500 rounded-full transition-all z-10">
-      <X size={24} />
-    </button>
-    
-    {selectedImage.toLowerCase().endsWith('.pdf') ? (
-      <iframe 
-        src={selectedImage} 
-        className="w-full max-w-4xl h-[85vh] rounded-2xl border border-slate-800 shadow-2xl bg-white" 
-        title="PDF Report Viewer"
-      />
-    ) : (
-      <img 
-        src={selectedImage} 
-        alt="Lab Report Fullscreen" 
-        className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-slate-800" 
-      />
-    )}
-  </div>
-)}
+      {/* Image Modal */}
+      {selectedImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-fadeIn">
+          <button onClick={() => setSelectedImage(null)} className="absolute top-6 right-6 p-3 bg-slate-900 border border-slate-700 text-slate-400 hover:text-white hover:bg-red-900/50 hover:border-red-500 rounded-full transition-all">
+            <X size={24} />
+          </button>
+          <img src={selectedImage} alt="Lab Report Fullscreen" className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-slate-800" />
+        </div>
+      )}
 
       {/* 🟢 FULL SIDEBAR NAVIGATION (100% Restored) */}
       <div className="w-72 bg-slate-950 border-r border-slate-800/60 flex flex-col justify-between hidden md:flex z-20 shadow-[4px_0_24px_rgba(0,0,0,0.4)]">
@@ -199,8 +178,8 @@ export default function LabReportsPage() {
                         <button onClick={() => setSelectedImage(report.file_url)} className="w-full py-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/50 text-slate-300 rounded-xl text-[10px] font-bold tracking-widest uppercase transition-all flex justify-center items-center gap-2">
                           <Maximize2 size={14} className="text-amber-400" /> View Report
                         </button>
-                        <button onClick={() => handleDownload(report.id, report.test_name, report.date)} className="w-full py-3 bg-amber-600/10 hover:bg-amber-600/20 border border-amber-900/50 text-amber-400 rounded-xl text-[10px] font-bold tracking-widest uppercase transition-all flex justify-center items-center gap-2">
-                          <Download size={14} /> Download Report
+                        <button onClick={() => handleDownload(report.file_url, report.test_name, report.date)} className="w-full py-3 bg-amber-600/10 hover:bg-amber-600/20 border border-amber-900/50 text-amber-400 rounded-xl text-[10px] font-bold tracking-widest uppercase transition-all flex justify-center items-center gap-2">
+                          <Download size={14} /> Download (.PNG)
                         </button>
                       </div>
                     ) : (

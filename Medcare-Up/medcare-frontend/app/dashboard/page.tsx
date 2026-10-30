@@ -6,13 +6,17 @@ import Link from "next/link";
 import axios from "axios";
 import { 
   ShieldCheck, Home, Bot, Bell, CalendarPlus, 
-  CalendarClock, LogOut, User, Activity, CreditCard, LockKeyhole 
+  CalendarClock, LogOut, User, Activity, CreditCard, LockKeyhole,
+  Menu, X 
 } from "lucide-react";
 
 export default function PatientDashboard() {
   const router = useRouter();
   const [patientName, setPatientName] = useState("Patient");
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false); // 🟢 NEW: Unread logic state
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  
+  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("medcare_token");
@@ -21,7 +25,6 @@ export default function PatientDashboard() {
       return;
     }
 
-    // 🚀 Fetch profile for name & notifications for the "NEW" badge
     const fetchDashboardData = async () => {
       try {
         const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -32,7 +35,6 @@ export default function PatientDashboard() {
         
         setPatientName(profileRes.data.first_name || "Patient");
         
-        // 🟢 Check if there are any unread notifications (is_read === false)
         const unreadExists = notifRes.data.some((n: any) => n.is_read === false);
         setHasUnreadNotifications(unreadExists);
 
@@ -50,34 +52,50 @@ export default function PatientDashboard() {
   };
 
   return (
-<div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans overflow-hidden print:bg-white print:text-black print:h-auto print:overflow-visible">      
-      {/* 🟢 FIXED SIDEBAR NAVIGATION */}
-      <div className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col justify-between hidden md:flex z-10 print:hidden">        <div>
-          <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-            <ShieldCheck className="w-10 h-10 text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]" />
-            <div>
-              <h1 className="text-sm font-bold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-cyan-400">Patient Portal</span></h1>
+    <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans overflow-hidden print:bg-white print:text-black print:h-auto print:overflow-visible">      
+      
+      {/* 🟢 MOBILE OVERLAY BACKGROUND  */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 md:hidden print:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* 🟢 FIXED SIDEBAR NAVIGATION  */}
+      <div className={`fixed inset-y-0 left-0 w-72 bg-slate-900 border-r border-slate-800 flex flex-col justify-between z-50 shadow-[4px_0_24px_rgba(0,0,0,0.4)] transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 print:hidden ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>        
+        <div>
+          <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-10 h-10 text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.4)]" />
+              <div>
+                <h1 className="text-sm font-bold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-cyan-400">Patient Portal</span></h1>
+              </div>
             </div>
+            {/* 🟢 Phone  */}
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-white">
+              <X size={24} />
+            </button>
           </div>
           
           <div className="p-4 space-y-2 mt-4">
-            <button className="w-full flex items-center gap-3 px-4 py-3 bg-cyan-900/50 text-cyan-400 border border-cyan-800 rounded-xl text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+            <button className="w-full flex items-center gap-3 px-4 py-3 bg-cyan-900/50 text-cyan-400 border border-cyan-800 rounded-xl text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(6,182,212,0.1)] cursor-default">
               <Home size={18} /> Home
             </button>
-            <Link href="/dashboard/health-vault" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-800/50">
+            <Link href="/dashboard/health-vault" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-800/50">
               <Activity size={18} /> My Health Vault
             </Link>
-            <Link href="/dashboard/billing" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-800/50">
+            <Link href="/dashboard/billing" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-800/50">
               <CreditCard size={18} /> Billing
             </Link>
-            <Link href="/dashboard/security" className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-800/50">
+            <Link href="/dashboard/security" onClick={() => setIsSidebarOpen(false)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-widest uppercase transition-all text-slate-500 hover:text-slate-300 hover:bg-slate-800/50">
               <LockKeyhole size={18} /> Security & Privacy
             </Link>
           </div>
         </div>
 
         <div className="p-4 border-t border-slate-800">
-          <div className="flex items-center gap-3 px-4 py-3 mb-2">
+          <div className="flex items-center gap-3 px-4 py-3 mb-2 bg-slate-800/30 rounded-xl border border-slate-700/50">
             <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
               <User size={16} className="text-slate-400" />
             </div>
@@ -96,13 +114,28 @@ export default function PatientDashboard() {
       <div className="flex-1 flex flex-col h-screen overflow-y-auto relative print:h-auto print:overflow-visible print:bg-white print:text-black">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none"></div>
         
-        <div className="p-8 md:p-12 max-w-5xl w-full mx-auto z-10">
+        {/* Phone වලට පෙනෙන පරිදි Padding (p-6 md:p-12) වෙනස් කර ඇත */}
+        <div className="p-6 md:p-12 max-w-5xl w-full mx-auto z-10">
           
+          {/* 🟢 MOBILE HEADER & MENU BUTTON */}
+          <div className="md:hidden flex items-center justify-between mb-8 pb-4 border-b border-slate-800/60">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-8 h-8 text-cyan-500" />
+              <h1 className="text-xs font-extrabold tracking-widest uppercase text-white leading-tight">MedCare<br/><span className="text-cyan-400 text-[9px]">Patient Portal</span></h1>
+            </div>
+            <button 
+              onClick={() => setIsSidebarOpen(true)} 
+              className="p-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <Menu size={24} />
+            </button>
+          </div>
+
           <div className="mb-10">
-            <h2 className="text-3xl font-light tracking-widest uppercase text-white mb-2">
+            <h2 className="text-2xl md:text-3xl font-light tracking-widest uppercase text-white mb-2">
               Welcome to your <span className="font-bold text-cyan-400">Dashboard</span>
             </h2>
-            <p className="text-xs text-slate-500 tracking-widest uppercase">Select an option below to manage your healthcare</p>
+            <p className="text-[10px] md:text-xs text-slate-500 tracking-widest uppercase">Select an option below to manage your healthcare</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -124,7 +157,6 @@ export default function PatientDashboard() {
                 <Bell className="w-7 h-7 text-amber-400" />
               </div>
               
-              {/* 🟢 DYNAMIC NEW BADGE */}
               {hasUnreadNotifications && (
                 <div className="absolute top-8 right-8 flex items-center gap-2">
                   <span className="relative flex h-3 w-3">

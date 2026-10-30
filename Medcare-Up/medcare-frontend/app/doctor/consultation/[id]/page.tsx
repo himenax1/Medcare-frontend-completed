@@ -10,6 +10,15 @@ import {
   Save, AlertOctagon, Info, ShieldAlert, Plus, Trash2, Activity, ScrollText 
 } from "lucide-react";
 
+// Pre-approved Medicines (100% matched with PDF requirements)
+const MEDICINE_LIST = [
+  "Paracetamol", "Diclofenac", "Ibuprofen", "Drotaverine", "Tramadol", 
+  "Ciprofloxacin", "Amoxicillin", "Nitrofurantoin", "Ceftriaxone", "Azithromycin", 
+  "Potassium Citrate", "Tamsulosin", "Sildenafil", "Prednisolone", "Furosemide (Lasix)", 
+  "Losartan", "Amlodipine", "Metformin", "Insulin", "Erythropoietin (EPO)", 
+  "Calcium Carbonate", "Vitamin C", "Vitamin B-Complex", "Iron Tablets", "Folic Acid"
+];
+
 export default function ConsultationActionPage() {
   const router = useRouter();
   const params = useParams();
@@ -28,29 +37,13 @@ export default function ConsultationActionPage() {
   const [labCatalog, setLabCatalog] = useState<{test_name: string, price: number}[]>([]);
   const [selectedLabTest, setSelectedLabTest] = useState("");
   const [sendingLab, setSendingLab] = useState(false);
-  const [activeLabRequests, setActiveLabRequests] = useState<any[]>([]);
 
   // 💊 Prescription States
   const [doctorNote, setDoctorNote] = useState("");
   const [medicines, setMedicines] = useState<any[]>([]);
   const [sendingRx, setSendingRx] = useState(false);
   const [ddiWarning, setDdiWarning] = useState<any>(null); // To store AI Warning
-  const [overrideReason, setOverrideReason] = useState(""); //Override reason 
-
-  // 💊 Dynamic Medicine State
-  const [medicineCatalog, setMedicineCatalog] = useState<any[]>([]);
-
-  const fetchMedicineCatalog = async (token: string) => {
-    try {
-      const response = await axios.get("http://localhost:8000/medicines", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setMedicineCatalog(response.data || []);
-    } catch (err) {
-      console.error("Failed to load medicine catalog");
-    }
-  };
-
+  
   // System messages
   const [sysMessage, setSysMessage] = useState({ text: "", type: "" }); // type: "success" | "error"
 
@@ -62,8 +55,6 @@ export default function ConsultationActionPage() {
     }
     fetchConsultationData(token);
     fetchLabCatalog(token);
-    fetchActiveLabRequests(token);
-    fetchMedicineCatalog(token);
   }, [appointmentId, router]);
 
   // 1. Fetch Patient Info (From Dashboard Queue due to Clinical Blindness)
@@ -83,6 +74,7 @@ export default function ConsultationActionPage() {
       }
 
       setPatientInfo(apt);
+      
       if (apt.status === "In Progress") {
         setIsArrived(true);
       }
@@ -101,17 +93,6 @@ export default function ConsultationActionPage() {
       setLabCatalog(response.data);
     } catch (err) {
       console.error("Failed to load lab catalog");
-    }
-  };
-
-  const fetchActiveLabRequests = async (token: string) => {
-    try {
-      const response = await axios.get(`http://localhost:8000/appointments/${appointmentId}/lab-tests`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setActiveLabRequests(response.data || []);
-    } catch (err) {
-      console.error("Failed to fetch active lab requests");
     }
   };
 
@@ -163,6 +144,7 @@ export default function ConsultationActionPage() {
       return;
     }
 
+    // Validate that required fields are filled for added medicines
     for (let med of medicines) {
       if (!med.medicine_name || !med.dose || !med.frequency || !med.duration) {
         showToast("Please fill all required fields (Name, Dose, Freq, Duration) for selected medicines.", "error");
@@ -178,8 +160,7 @@ export default function ConsultationActionPage() {
       await axios.post(`http://localhost:8000/appointments/${appointmentId}/prescribe`, {
         medicines: medicines,
         doctor_note: doctorNote,
-        override_warning: override,
-        override_reason: overrideReason 
+        override_warning: override
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -187,10 +168,9 @@ export default function ConsultationActionPage() {
       showToast("E-Prescription generated and securely sent to HealthVault.", "success");
       setMedicines([]);
       setDoctorNote("");
-      setOverrideReason(""); 
-      setDdiWarning(null);   
 
     } catch (err: any) {
+      // Catch AI DDI Warning (400 Error with JSON Payload)
       if (err.response?.status === 400 && err.response?.data?.detail?.error_type === "DDI_WARNING") {
         setDdiWarning(err.response.data.detail);
       } else {
@@ -216,27 +196,10 @@ export default function ConsultationActionPage() {
       
       showToast(`${selectedLabTest} request sent securely. Billing triggered.`, "success");
       setSelectedLabTest("");
-      const tokenVal = localStorage.getItem("medcare_token");
-      if (tokenVal) fetchActiveLabRequests(tokenVal);
     } catch (err: any) {
       showToast(err.response?.data?.detail || "Failed to send lab request.", "error");
     } finally {
       setSendingLab(false);
-    }
-  };
-
-  // 🚀 ACTION 4.1: CANCEL LAB REQUEST
-  const handleCancelLabRequest = async (testId: number) => {
-    try {
-      const token = localStorage.getItem("medcare_token");
-      await axios.put(`http://localhost:8000/lab-tests/${testId}/cancel`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      showToast("Lab test request cancelled successfully.", "success");
-      if (token) fetchActiveLabRequests(token);
-    } catch (err: any) {
-      showToast(err.response?.data?.detail || "Failed to cancel lab test.", "error");
     }
   };
 
@@ -254,6 +217,7 @@ export default function ConsultationActionPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      // Redirect back to queue
       router.push("/doctor/queue");
     } catch (err: any) {
       showToast(err.response?.data?.detail || "Failed to complete appointment.", "error");
@@ -273,7 +237,7 @@ export default function ConsultationActionPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans overflow-hidden selection:bg-sky-500/30">
       
-      {/* 🔴 AI DDI WARNING MODAL */}
+      {/* 🔴 AI DDI WARNING MODAL (The Trap) */}
       {ddiWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-fadeIn">
           <div className="max-w-2xl w-full bg-slate-900 border-2 border-red-500 rounded-3xl p-8 shadow-[0_0_50px_rgba(220,38,38,0.3)]">
@@ -287,7 +251,7 @@ export default function ConsultationActionPage() {
               </div>
             </div>
             
-            <div className="space-y-4 font-mono text-sm mb-6">
+            <div className="space-y-4 font-mono text-sm mb-8">
               <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
                 <span className="text-[10px] text-slate-500 uppercase tracking-widest block mb-1">Rule Match</span>
                 <span className="text-amber-400 font-bold">{ddiWarning.rule_match}</span>
@@ -302,30 +266,16 @@ export default function ConsultationActionPage() {
               </div>
             </div>
 
-            <div className="mb-6">
-              <label className="block text-[10px] text-red-500 uppercase tracking-widest font-bold mb-2">
-                Clinical Justification for Override *
-              </label>
-              <textarea 
-                value={overrideReason}
-                onChange={(e) => setOverrideReason(e.target.value)}
-                placeholder="State your clinical reason for overriding this warning (e.g., Benefits outweigh risk, patient under monitoring)..."
-                className="w-full bg-slate-950 border border-red-900/50 rounded-xl p-3 text-sm text-red-200 focus:outline-none focus:border-red-500 resize-none font-mono"
-                rows={2}
-              />
-            </div>
-
             <div className="flex flex-col md:flex-row gap-4">
               <button 
-                onClick={() => { setDdiWarning(null); setOverrideReason(""); }} 
+                onClick={() => setDdiWarning(null)} 
                 className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold tracking-widest uppercase transition-colors"
               >
                 Cancel & Edit Prescription
               </button>
               <button 
                 onClick={() => handleSendPrescription(true)} 
-                disabled={!overrideReason.trim()}
-                className="flex-1 py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black tracking-widest uppercase transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(220,38,38,0.3)] flex items-center justify-center gap-2 group"
+                className="flex-1 py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black tracking-widest uppercase transition-colors shadow-[0_0_20px_rgba(220,38,38,0.3)] flex items-center justify-center gap-2 group"
               >
                 <ShieldAlert size={16} className="group-hover:animate-ping" /> Override Warning & Send
               </button>
@@ -361,6 +311,7 @@ export default function ConsultationActionPage() {
           </div>
 
           <div className="flex items-center gap-4 w-full md:w-auto">
+            {/* The Arrive Button - The Ultimate Lock */}
             <button 
               onClick={handleArrive}
               disabled={isArrived || arriving}
@@ -423,35 +374,6 @@ export default function ConsultationActionPage() {
                   {sendingLab ? <Activity size={14} className="animate-spin" /> : <Send size={14} />} Send Request & Bill
                 </button>
               </div>
-
-              {/* Active Lab Requests List with Cancel Button */}
-              <div className="mt-6 pt-4 border-t border-slate-800 space-y-2">
-                <span className="text-[10px] text-slate-500 uppercase tracking-widest block font-mono mb-2">
-                  Active Requests
-                </span>
-                {activeLabRequests.length === 0 ? (
-                  <p className="text-[11px] text-slate-600 italic">No active lab requests.</p>
-                ) : (
-                  <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                    {activeLabRequests.map((req) => (
-                      <div key={req.id} className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs">
-                        <div>
-                          <p className="font-bold text-slate-200">{req.test_name}</p>
-                          <span className="text-[9px] text-amber-400 font-mono uppercase">{req.status}</span>
-                        </div>
-                        {(req.status === "PENDING" || req.status === "Pending") && (
-                          <button
-                            onClick={() => handleCancelLabRequest(req.id)}
-                            className="px-2.5 py-1 bg-red-950/50 hover:bg-red-900 border border-red-800 text-red-300 rounded-lg text-[10px] font-bold uppercase transition-colors shrink-0"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Doctor's Private Note */}
@@ -502,6 +424,7 @@ export default function ConsultationActionPage() {
                     </button>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pr-6">
+                      {/* Name Selection (Strict Logic) */}
                       <div className="md:col-span-2">
                         <label className="block text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">Approved Medicine Name *</label>
                         <select 
@@ -510,14 +433,11 @@ export default function ConsultationActionPage() {
                           className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 appearance-none"
                         >
                           <option value="">-- Select Medicine --</option>
-                          {medicineCatalog.map((item, i) => (
-                            <option key={i} value={item.generic_name}>
-                              {item.generic_name} {item.brand_name ? `(${item.brand_name})` : ''}
-                            </option>
-                          ))}
+                          {MEDICINE_LIST.map((name) => <option key={name} value={name}>{name}</option>)}
                         </select>
                       </div>
                       
+                      {/* Strength */}
                       <div>
                         <label className="block text-[9px] text-slate-500 uppercase tracking-widest font-bold mb-1">Strength (e.g. 500mg)</label>
                         <input 

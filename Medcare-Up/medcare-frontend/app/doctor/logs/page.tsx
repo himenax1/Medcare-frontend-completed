@@ -46,7 +46,7 @@ export default function DoctorActivityLogsPage() {
     router.push("/login");
   };
 
-  // UI Logic: Action එක අනුව අයිකනය සහ පාට වෙනස් කිරීම
+  
   const getActionStyles = (action: string) => {
     switch (action) {
       case "WARNING_OVERRIDDEN_BLOCKCHAIN":

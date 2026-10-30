@@ -6,7 +6,7 @@ import Link from "next/link";
 import axios from "axios";
 import { 
   ShieldCheck, Home, LogOut, ArrowLeft, Calendar as CalendarIcon, 
-  CheckCircle2, AlertTriangle, Stethoscope, ChevronLeft, ChevronRight, Activity, Clock, User
+  CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Activity, Clock, User, Lock
 } from "lucide-react";
 
 export default function BookAppointmentPage() {
@@ -16,10 +16,13 @@ export default function BookAppointmentPage() {
   const [message, setMessage] = useState({ text: "", type: "" });
 
   const [availableSchedules, setAvailableSchedules] = useState<{ [key: string]: any[] }>({});
+  // 🛡️ Track patient's own active appointments to enforce 1 slot per doctor per day in UI
+  const [myActiveAppointments, setMyActiveAppointments] = useState<any[]>([]);
   
-  // 🟢 Dynamic Calendar States
+  // 🟢 Dynamic Calendar States (Local Date)
   const [currentDate, setCurrentDate] = useState(new Date());
-  const todayDateString = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const now = new Date();
+  const todayDateString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   
   // 🟢 3-Step Booking Flow States
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -29,24 +32,58 @@ export default function BookAppointmentPage() {
   useEffect(() => {
     const token = localStorage.getItem("medcare_token");
     if (!token) { router.push("/login"); return; }
-    fetchSchedules(token);
+    fetchSchedulesAndMyBookings(token);
   }, [router]);
 
-  const fetchSchedules = async (token: string) => {
+  const fetchSchedulesAndMyBookings = async (token: string) => {
     try {
-      const response = await axios.get("http://localhost:8000/schedules/available", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const [schedRes, myAptRes] = await Promise.all([
+        axios.get("http://localhost:8000/schedules/available", {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get("http://localhost:8000/appointments/me/upcoming", {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => ({ data: { appointments: [] } }))
+      ]);
       
+      const currentTime = new Date();
       const groupedData: { [key: string]: any[] } = {};
-      if (Array.isArray(response.data)) {
-        response.data.forEach((schedule: any) => {
+
+      if (Array.isArray(schedRes.data)) {
+        schedRes.data.forEach((schedule: any) => {
+          if (schedule.date === todayDateString && schedule.end_time) {
+            const [year, month, day] = schedule.date.split("-").map(Number);
+            const [hours, minutes] = schedule.end_time.split(":").map(Number);
+            const scheduleEnd = new Date(year, month - 1, day, hours, minutes, 0);
+            if (currentTime >= scheduleEnd) {
+              return;
+            }
+          }
+
           if (!groupedData[schedule.date]) groupedData[schedule.date] = [];
           groupedData[schedule.date].push(schedule);
         });
       }
       setAvailableSchedules(groupedData);
-    } catch (err) { console.error(err); } finally { setFetching(false); }
+      setMyActiveAppointments(myAptRes.data?.appointments || []);
+    } catch (err) { 
+      console.error(err); 
+    } finally { 
+      setFetching(false); 
+    }
+  };
+
+  // 🛡️ Helper: Check if the logged-in patient already has a booking with this doctor on this date
+  const getExistingBookingForDoctor = (dateStr: string | null, docObj: any) => {
+    if (!dateStr || !docObj) return null;
+    const cleanDocName = (docObj.doctor_name || "").toLowerCase().replace(/^dr\.?\s*/i, "").trim();
+    const cleanDocUser = (docObj.doctor_username || "").toLowerCase().trim();
+
+    return myActiveAppointments.find((apt: any) => {
+      if (apt.date !== dateStr || apt.status === "Cancelled") return false;
+      const aptDoc = (apt.doctor_name || "").toLowerCase().replace(/^dr\.?\s*/i, "").trim();
+      return aptDoc === cleanDocName || aptDoc === cleanDocUser;
+    });
   };
 
   const handleConfirmBooking = async () => {
@@ -56,17 +93,32 @@ export default function BookAppointmentPage() {
 
     try {
       const token = localStorage.getItem("medcare_token");
-      await axios.post("http://localhost:8000/appointments/", {
-        doctor_name: selectedDoctor.doctor_username,
-        date: selectedDate,
-        slot_number: selectedSlot
-      }, { headers: { Authorization: `Bearer ${token}` } });
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+      
+      await axios.post(
+        "http://localhost:8000/appointments/", 
+        {
+          doctor_name: selectedDoctor.doctor_username || selectedDoctor.doctor_name,
+          date: selectedDate,
+          slot_number: selectedSlot
+        }, 
+        { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          } 
+        }
+      );
 
       setMessage({ text: `Successfully booked Slot ${selectedSlot} with Dr. ${selectedDoctor.doctor_name} on ${selectedDate}.`, type: "success" });
-      setSelectedDoctor(null); setSelectedSlot(null);
+      setSelectedDoctor(null); 
+      setSelectedSlot(null);
       
-      // Auto-refresh schedules to lock the slot
-      fetchSchedules(token!);
+      // Auto-refresh schedules and patient bookings to lock the doctor/slot
+      fetchSchedulesAndMyBookings(token);
 
     } catch (err: any) {
       let errorText = "Booking failed.";
@@ -80,19 +132,19 @@ export default function BookAppointmentPage() {
 
   const handleLogout = () => { localStorage.removeItem("medcare_token"); router.push("/login"); };
 
-  // 🟢 FIXED: Missing Array added back! Calendar Logic (Month Navigation)
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
   const emptySlotsCount = firstDayOfMonth;
   
-  // This was the missing array that caused the crash!
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   const nextMonth = () => setCurrentDate(new Date(currentYear, currentMonth + 1, 1));
   const prevMonth = () => setCurrentDate(new Date(currentYear, currentMonth - 1, 1));
   const monthName = currentDate.toLocaleString('default', { month: 'long' });
+
+  const existingDoctorBooking = getExistingBookingForDoctor(selectedDate, selectedDoctor);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 flex font-sans overflow-hidden">
@@ -125,7 +177,7 @@ export default function BookAppointmentPage() {
           <h2 className="text-3xl font-light tracking-widest uppercase text-white mb-1">
             Interactive <span className="font-bold text-emerald-400">Booking</span>
           </h2>
-          <p className="text-xs text-slate-500 tracking-widest uppercase">Step-by-step appointment scheduling</p>
+          <p className="text-xs text-slate-500 tracking-widest uppercase">Step-by-step appointment scheduling (Max 1 slot per doctor/day)</p>
         </div>
 
         {message.text && (
@@ -189,7 +241,7 @@ export default function BookAppointmentPage() {
                       >
                         <span className={`text-xs md:text-sm font-bold ${isSelected ? "text-white" : isPast ? "text-slate-700" : "text-slate-300"}`}>{day}</span>
                         
-                        {/* 🟢 INITALS DISPLAY */}
+                        {/* 🟢 INITIALS DISPLAY */}
                         {daySchedules && !isPast && (
                           <div className="flex flex-wrap gap-1 justify-center px-1">
                             {daySchedules.slice(0, 3).map((doc: any, idx: number) => (
@@ -224,28 +276,40 @@ export default function BookAppointmentPage() {
                 </div>
               ) : (
                 <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                  {availableSchedules[selectedDate]?.map((doc: any, idx: number) => (
-                    <div 
-                      key={idx} 
-                      onClick={() => { setSelectedDoctor(doc); setSelectedSlot(null); }} 
-                      className={`border rounded-2xl p-4 cursor-pointer transition-all ${
-                        selectedDoctor?.id === doc.id ? "bg-cyan-950/40 border-cyan-500 shadow-lg" : "bg-slate-950 border-slate-800 hover:border-slate-600"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 shrink-0">
-                          <User size={16} className={selectedDoctor?.id === doc.id ? "text-cyan-400" : "text-slate-500"} />
+                  {availableSchedules[selectedDate]?.map((doc: any, idx: number) => {
+                    const alreadyBookedThisDoc = getExistingBookingForDoctor(selectedDate, doc);
+
+                    return (
+                      <div 
+                        key={idx} 
+                        onClick={() => { setSelectedDoctor(doc); setSelectedSlot(null); }} 
+                        className={`border rounded-2xl p-4 cursor-pointer transition-all ${
+                          selectedDoctor?.id === doc.id ? "bg-cyan-950/40 border-cyan-500 shadow-lg" : "bg-slate-950 border-slate-800 hover:border-slate-600"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 shrink-0">
+                              <User size={16} className={selectedDoctor?.id === doc.id ? "text-cyan-400" : "text-slate-500"} />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-white leading-tight">Dr. {doc.doctor_name}</h4>
+                              <p className="text-[9px] text-slate-500 tracking-widest uppercase">{doc.specialization}</p>
+                            </div>
+                          </div>
+
+                          {alreadyBookedThisDoc && (
+                            <span className="px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-700/60 text-amber-400 text-[8px] font-mono font-bold uppercase tracking-widest shrink-0">
+                              Booked (Slot #{String(alreadyBookedThisDoc.slot_number).padStart(2, '0')})
+                            </span>
+                          )}
                         </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-white leading-tight">Dr. {doc.doctor_name}</h4>
-                          <p className="text-[9px] text-slate-500 tracking-widest uppercase">{doc.specialization}</p>
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-cyan-400 bg-cyan-950/30 px-3 py-1.5 rounded-lg w-max mt-3">
+                          <Clock size={12} /> {doc.start_time} - {doc.end_time}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] font-mono text-cyan-400 bg-cyan-950/30 px-3 py-1.5 rounded-lg w-max mt-3">
-                        <Clock size={12} /> {doc.start_time} - {doc.end_time}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -257,28 +321,42 @@ export default function BookAppointmentPage() {
                    <p className="text-[10px] text-slate-500 uppercase">Select Available Slot</p>
                 </div>
 
-                <div className="grid grid-cols-4 sm:grid-cols-5 gap-3 mb-6">
-                  {Array.from({ length: selectedDoctor.max_patients || 10 }, (_, i) => i + 1).map((slotNum) => {
-                    const isBooked = selectedDoctor.booked_slots?.includes(slotNum);
-                    return (
-                      <button
-                        key={slotNum} disabled={isBooked} onClick={() => setSelectedSlot(slotNum)}
-                        className={`py-3 rounded-xl text-xs font-bold uppercase font-mono transition-all ${
-                          isBooked ? "bg-red-950/20 border border-red-900/30 text-red-500/50 cursor-not-allowed line-through" 
-                          : selectedSlot === slotNum ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-110" 
-                          : "bg-slate-950 border border-slate-800 text-slate-300 hover:border-emerald-500 cursor-pointer"
-                        }`}
-                      >
-                        {String(slotNum).padStart(2, '0')}
-                      </button>
-                    );
-                  })}
-                </div>
+                {existingDoctorBooking ? (
+                  <div className="bg-amber-950/30 border border-amber-800/60 rounded-2xl p-6 text-center space-y-2">
+                    <Lock size={28} className="text-amber-400 mx-auto mb-2" />
+                    <p className="text-xs font-bold uppercase tracking-widest text-amber-300">
+                      1 Slot Limit Reached for Dr. {selectedDoctor.doctor_name}
+                    </p>
+                    <p className="text-[11px] text-slate-300 font-mono leading-relaxed">
+                      You have already booked <strong>Slot #{String(existingDoctorBooking.slot_number).padStart(2, '0')}</strong> ({existingDoctorBooking.reference_number}) on {selectedDate}. You may book another consultant on this date or select a different date.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-3 mb-6">
+                      {Array.from({ length: selectedDoctor.max_patients || 10 }, (_, i) => i + 1).map((slotNum) => {
+                        const isBooked = selectedDoctor.booked_slots?.includes(slotNum);
+                        return (
+                          <button
+                            key={slotNum} disabled={isBooked} onClick={() => setSelectedSlot(slotNum)}
+                            className={`py-3 rounded-xl text-xs font-bold uppercase font-mono transition-all ${
+                              isBooked ? "bg-red-950/20 border border-red-900/30 text-red-500/50 cursor-not-allowed line-through" 
+                              : selectedSlot === slotNum ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-110" 
+                              : "bg-slate-950 border border-slate-800 text-slate-300 hover:border-emerald-500 cursor-pointer"
+                            }`}
+                          >
+                            {String(slotNum).padStart(2, '0')}
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                {selectedSlot && (
-                  <button onClick={handleConfirmBooking} disabled={loading} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] disabled:opacity-50 flex justify-center items-center gap-2 animate-fadeIn">
-                    {loading ? <><Activity size={16} className="animate-spin" /> Processing...</> : `Confirm Slot ${selectedSlot}`}
-                  </button>
+                    {selectedSlot && (
+                      <button onClick={handleConfirmBooking} disabled={loading} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold tracking-widest uppercase transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] disabled:opacity-50 flex justify-center items-center gap-2 animate-fadeIn">
+                        {loading ? <><Activity size={16} className="animate-spin" /> Processing...</> : `Confirm Slot ${selectedSlot}`}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
